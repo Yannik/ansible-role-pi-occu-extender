@@ -1,0 +1,60 @@
+- name: Configure udev rule that enables the tty of the HMIP-RFUSB stick
+  copy:
+    src: 99-hmip-rfusb.rules
+    dest: /etc/udev/rules.d/99-hmip-rfusb.rules
+
+- name: Install socat
+  package: name=socat state=present
+
+- name: Install pyopenssl
+  package: name=python-openssl state=present
+
+- name: Create /etc/ssl/homematic-socat
+  file: path=/etc/ssl/homematic-socat state=directory
+
+- name: Create private key
+  openssl_privatekey:
+    path: /etc/ssl/homematic-socat/server.key
+
+- name: Create csr
+  openssl_csr:
+    #country_name: "DE"
+    #state_or_province_name: "unknown"
+    #organization_name: "unknown"
+    path: /etc/ssl/homematic-socat/server.csr
+    privatekey_path: /etc/ssl/homematic-socat/server.key
+
+- name: Create self-signed certificate
+  openssl_certificate:
+    path: /etc/ssl/homematic-socat/server.crt
+    csr_path: /etc/ssl/homematic-socat/server.csr
+    privatekey_path: /etc/ssl/homematic-socat/server.key
+    provider: selfsigned
+
+- name: Fetch CCU crt
+  fetch: src=/etc/ssl/homematic-socat/client.crt dest=/tmp/client.crt fail_on_missing=yes flat=yes
+  delegate_to: "{{ occu_host }}"
+  changed_when: False
+
+- name: Install CCU crt on this host
+  copy: src=/tmp/client.crt dest=/etc/ssl/homematic-socat/client.crt
+
+- name: Fetch this hosts cert
+  fetch: src=/etc/ssl/homematic-socat/server.crt dest=/tmp/server.crt fail_on_missing=yes flat=yes
+  changed_when: False
+
+- name: Install this hosts cert on CCU
+  copy: src=/tmp/server.crt dest=/etc/ssl/homematic-socat/{{ inventory_hostname }}.crt
+  delegate_to: "{{ occu_host }}"
+  notify:
+    - Restart socat on ccu
+    - Restart HMIPServer on ccu
+
+- name: Install socat systemd service
+  copy:
+    src: socat.service
+    dest: /etc/systemd/system/socat-homematic.service
+
+- name: Enable socat services
+  service: name=socat-homematic enabled=yes state=started
+

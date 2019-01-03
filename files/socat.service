@@ -1,0 +1,14 @@
+[Unit]
+Description=Socat remote hm/hmip tty
+After=network.target
+
+[Service]
+Type=simple
+
+ExecStart=/usr/bin/socat -d -d /dev/ttyUSB0,b115200,raw,echo=0 openssl-listen:2000,cert=/etc/ssl/homematic-socat/server.crt,key=/etc/ssl/homematic-socat/server.key,cafile=/etc/ssl/homematic-socat/client.crt,reuseaddr
+
+Restart=always
+RestartSec=1s
+
+[Install]
+WantedBy=multi-user.target
